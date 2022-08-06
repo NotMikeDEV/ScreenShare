@@ -6,4 +6,16 @@ services:
     network_mode: host
     restart: always
     environment:
-    - PORT=80
+    - PORT=8080
+  caddy:
+    image: caddy:latest
+    restart: always
+    network_mode: host
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    command: sh -c "caddy reverse-proxy --from screenshare.notmike.uk --to http://127.0.0.1:8080"
+
+volumes:
+  caddy_data:
+  caddy_config:
