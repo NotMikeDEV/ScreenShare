@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>ScreenConnector</title>
+		<meta name="viewport" content="width=480" />
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.0/jquery.min.js"></script>
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.8.2/css/bulma.min.css" />
+		<script src="/socket.io/socket.io.js"></script>
+    <style>
+      .center {
+        width:250px;
+        margin:auto;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+      .banner {
+        width:250px;
+        margin:auto;
+        position: absolute;
+        top: 10%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+    </style>
+	</head>
+	<body>
+			Error: Browser not supported.
+	</body>
+  <script>
+const StreamOptions = {
+  iceServers: [
+    {
+        urls: 'stun:stun.sipgate.net:10000',
+    },
+    {
+        urls: 'stun:stun.l.google.com:19302',
+    }
+  ]
+};
+function handleSuccess(stream) {
+  $('body').empty();
+  const Preview = $('<DIV>').appendTo($('body'))
+    .width("50%")
+    .height("50%")
+    .addClass("center")
+    .text("Preview:")
+  const Video = $('<VIDEO>').appendTo(Preview)
+    .prop('autoplay', true)
+    .prop('playsinline', true)
+    .width("100%")
+    .height("100%")
+  ;
+  Video[0].srcObject = stream;
+
+  // demonstrates how to detect that the user has stopped
+  // sharing the screen via the browser UI.
+  stream.getVideoTracks()[0].addEventListener('ended', () => {
+    location.href="/"
+  });
+  const Banner = $('<DIV>').appendTo($('body'))
+    .addClass("banner")
+  const ErrorMessage = $('<H1>').appendTo(Banner).addClass('has-text-danger')
+  const JoinMessage = $('<H1>').appendTo(Banner).text("Join with code:")
+  const CodeInput = $('<INPUT>').appendTo(Banner)
+    .prop('placeholder', 'Enter Code')
+    .width('200px')
+    .addClass('input')
+  const JoinButton = $('<BUTTON>').appendTo(Banner)
+    .text('Join')
+    .width('200px')
+    .addClass('button')
+  JoinButton.click(()=>{
+    ErrorMessage.text("Joining...")
+    const ServerConnection = io('/join');
+    ServerConnection.on('connect', ()=>{
+      ServerConnection.send('join', CodeInput.val())
+      ErrorMessage.text("")
+    })
+    let PeerConnection = null;
+    ServerConnection.on('message', (Type, Data)=>{
+      console.log(Type,Data)
+      if (Type == 'Error')
+        ErrorMessage.text(Data)
+      if (Type == 'Connect') {
+        ID = Data
+        ErrorMessage.text("Setting up session...")
+        PeerConnection = new RTCPeerConnection(StreamOptions);
+        PeerConnection.onconnectionstatechange = (event)=>{
+          console.log("State Change", event)
+        }
+        console.log("Create PeerConnection", StreamOptions)
+				var SendStream = new MediaStream();
+				SendStream.addTrack(stream.getVideoTracks()[0]);
+				PeerConnection.addStream(SendStream);
+				PeerConnection.onicecandidate = function(e) {
+          if (e.candidate)
+          {
+            ServerConnection.send("ICE", e.candidate);
+            console.log("Sent Candidate", e.candidate);
+          }
+        }
+				PeerConnection.createOffer(function (Offer){
+					PeerConnection.setLocalDescription(Offer);
+					ServerConnection.send("Call", Offer);
+					console.log("Sent Offer", Offer);
+				}, function (e1, e2){
+					console.log("PeerOffer Error ", e1, e2);
+				});
+      }
+      if (Type == 'Answer') {
+        PeerConnection.setRemoteDescription(Data);
+        Banner.text('Sharing Screen')
+      }
+      if (Type == 'ICE') {
+        console.log("Add ICE Candidate:", Data);
+        PeerConnection.addIceCandidate(Data);
+      }
+    })
+  })
+}
+
+function handleError(error) {
+  alert(`getDisplayMedia error: ${error.name}`, error);
+  location.href="/";
+}
+
+navigator.mediaDevices.getDisplayMedia({video: true})
+    .then(handleSuccess, handleError);
+$('body').text("Please grant screen sharing permission.");
+</script>
+</html>

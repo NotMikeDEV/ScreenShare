@@ -1,0 +1,9 @@
+version: '2.1'
+services:
+  server:
+    build:
+      context: .
+    network_mode: host
+    restart: always
+    environment:
+    - PORT=80
